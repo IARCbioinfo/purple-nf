@@ -1,0 +1,9 @@
+name: purple-nf
+channels:
+  - conda-forge
+  - bioconda
+  - defaults
+dependencies:
+  - hmftools-cobalt=1.11	
+  - hmftools-purple=2.52
+  - hmftools-amber=3.5
