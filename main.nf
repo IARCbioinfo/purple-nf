@@ -76,20 +76,16 @@ process COBALT {
   script:
      if(params.tumor_only == false){
        """
-      echo COBALT -gc_profile /hmftools/hg38/GC_profile.1000bp.38.cnp \
+      COBALT -gc_profile /hmftools/hg38/GC_profile.1000bp.38.cnp \
               -ref_genome ${ref} -tumor_only -tumor_only_diploid_bed /hmftools/hg38/DiploidRegions.38.bed \
      	        -tumor  ${tumor_id}_T -tumor_bam ${tumor} -output_dir ${tumor_id}_COBALT -threads 1
-        mkdir ${tumor_id}_COBALT
-        touch ${tumor_id}_COBALT/test.f1 ${tumor_id}_COBALT/test.f2
        """
      }else{
        """
-       echo COBALT -gc_profile /hmftools/hg38/GC_profile.1000bp.38.cnp \
+      COBALT -gc_profile /hmftools/hg38/GC_profile.1000bp.38.cnp \
               -ref_genome ${ref} -reference ${tumor_id}_N -reference_bam ${normal} \
      	        -tumor  ${tumor_id}_T -tumor_bam ${tumor} -output_dir ${tumor_id}_COBALT -threads 1
-        mkdir ${tumor_id}_COBALT
-        touch ${tumor_id}_COBALT/test.f1 ${tumor_id}_COBALT/test.f2
-       """
+      """
      }
 
 }
@@ -106,19 +102,15 @@ process AMBER {
   script:
      if(params.tumor_only == false){
        """
-      echo AMBER  -loci /hmftools/hg38/GermlineHetPon.38.vcf -ref_genome ${ref} -tumor_only \
+      AMBER  -loci /hmftools/hg38/GermlineHetPon.38.vcf -ref_genome ${ref} -tumor_only \
               -tumor  ${tumor_id}_T -tumor_bam ${tumor} -output_dir ${tumor_id}_AMBER -threads 1
-              mkdir ${tumor_id}_AMBER
-              touch ${tumor_id}_AMBER/test.f1 ${tumor_id}_AMBER/test.f2
-       """
+      """
      }else{
        """
-        echo AMBER  -loci /hmftools/hg38/GermlineHetPon.38.vcf -ref_genome ${ref} \
+       AMBER  -loci /hmftools/hg38/GermlineHetPon.38.vcf -ref_genome ${ref} \
                -reference ${tumor_id}_N -reference_bam ${normal}  \
                -tumor  ${tumor_id}_T -tumor_bam ${tumor} -output_dir ${tumor_id}_AMBER -threads 1
-        mkdir ${tumor_id}_AMBER
-        touch ${tumor_id}_AMBER/test.f1 ${tumor_id}_AMBER/test.f2
-       """
+        """
      }
 
 }
@@ -142,7 +134,7 @@ process PURPLE {
   script:
      if(params.tumor_only == false){
        """
-      echo PURPLE -reference ${tumor_id}_N  -tumor ${tumor_id}_T \
+       PURPLE -reference ${tumor_id}_N  -tumor ${tumor_id}_T \
               -no_charts \
               -output_dir ${tumor_id}_PURPLE \
               -amber ${amber_dir} \
@@ -151,17 +143,11 @@ process PURPLE {
               -threads 1 \
               -ref_genome ${ref}
 
-              mkdir ${tumor_id}_PURPLE
-              touch ${tumor_id}_PURPLE/test.f1 ${tumor_id}_PURPLE/test.f2
-              touch ${tumor_id}_PURPLE/${tumor_id}_T.purple.purity.tsv
-              echo "t2\t3\t4" > ${tumor_id}_PURPLE/${tumor_id}_T.purple.purity.tsv
-              echo "t2\t3\t4" >> ${tumor_id}_PURPLE/${tumor_id}_T.purple.purity.tsv
               awk -v tumor=${tumor_id} '{print tumor"\t"\$0}' ${tumor_id}_PURPLE/${tumor_id}_T.purple.purity.tsv > ${tumor_id}_PURPLE/${tumor_id}_T.purple.purity.sample.tsv
-              #echo "${tumor_id}\tt2\t3\t4" >> ${tumor_id}_PURPLE/${tumor_id}_T.purple.purity.tsv
        """
      }else{
        """
-       echo PURPLE  -tumor_only  -tumor ${tumor_id}_T \
+       PURPLE  -tumor_only  -tumor ${tumor_id}_T \
                -no_charts \
                -output_dir ${tumor_id}_PURPLE \
                -amber ${amber_dir} \
@@ -170,11 +156,7 @@ process PURPLE {
                -threads 1 \
                -ref_genome ${ref}
 
-               mkdir ${tumor_id}_PURPLE
-               touch ${tumor_id}_PURPLE/test.f1 ${tumor_id}_PURPLE/test.f2
-               echo "t2\t3\t4" > ${tumor_id}_PURPLE/${tumor_id}_T.purple.purity.tsv
-               echo "t2\t3\t4" >> ${tumor_id}_PURPLE/${tumor_id}_T.purple.purity.tsv
-               awk -v tumor=${tumor_id} '{print tumor"\t"\$0}' ${tumor_id}_PURPLE/${tumor_id}_T.purple.purity.tsv > ${tumor_id}_PURPLE/${tumor_id}_T.purple.purity.sample.tsv
+        awk -v tumor=${tumor_id} '{print tumor"\t"\$0}' ${tumor_id}_PURPLE/${tumor_id}_T.purple.purity.tsv > ${tumor_id}_PURPLE/${tumor_id}_T.purple.purity.sample.tsv
 
        """
      }
