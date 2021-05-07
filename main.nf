@@ -165,103 +165,6 @@ process PURPLE {
 
 stats_purple.collectFile(name: 'purple_summary.txt', storeDir: params.output_folder, seed: 'tumor_id\tpurity\tnormFactor\tscore\tdiploidProportion\tploidy\tgender\tstatus\tpolyclonalProportion\tminPurity\tmaxPurity\tminPloidy\tmaxPloidy\tminDiploidProportion\tmaxDiploidProportion\tversion\tsomaticPenalty\twholeGenomeDuplication\tmsIndelsPerMb\tmsStatus\ttml\ttmlStatus\ttmbPerMb\ttmbStatus\tsvTumorMutationalBurden\n', newLine: false, skip: 1)
 
-// //we compute the snp_pileup process using 1CPU with low memory
-// process snppileup {
-//     tag "${tumor_id}-snppileup"
-//     label 'load_snpp'
-//
-//     input:
-//     set val(tumor_id), file(tumor), file(tumor_index), file(normal), file(normal_index) from tn_pairs
-//     file(vcf) from ch_vcf
-//     output:
-//     set val(tumor_id), file("${tumor_id}.csv.gz") into snppileup_result
-//
-//     script:
-//     if(params.debug == false){
-//     """
-//       ${params.snppileup_bin} \\
-//       --gzip \\
-//       --min-map-quality ${params.min_map_quality} \\
-//       --min-base-quality ${params.min_base_quality} \\
-//       --pseudo-snps ${params.pseudo_snps} \\
-//       --min-read-counts ${params.min_read_count} \\
-//        ${vcf} ${tumor_id}.csv.gz ${normal} ${tumor}
-//     """
-//    }else{
-//      """
-//        echo ${params.snppileup_bin} \\
-//        --gzip \\
-//        --min-map-quality ${params.min_map_quality} \\
-//        --min-base-quality ${params.min_base_quality} \\
-//        --pseudo-snps ${params.pseudo_snps} \\
-//        --min-read-counts ${params.min_read_count} \\
-//         ${vcf} ${tumor_id}.csv.gz ${normal} ${tumor}
-//       #we create the file to continue our process
-//       touch ${tumor_id}.csv.gz
-//      """
-//    }
-// }
-//
-// //we run FACETs with the create file
-//
-// process facets{
-//   tag "${tumor_id}-facets"
-//   label 'load_facets'
-//
-//   publishDir params.output_folder+'/facets/', mode: 'copy'
-//
-//   input:
-//   set val(tumor_id), file(snppileup_counts) from snppileup_result
-//
-//   output:
-//   file("${tumor_id}.def_cval${params.cval_proc2}_stats.txt") into stats_summary
-//   file("${tumor_id}.def_cval${params.cval_proc2}_CNV.txt")
-//   file("${tumor_id}.def_cval${params.cval_proc2}_CNV_spider.pdf")
-//   file("${tumor_id}.R_sessionInfo.txt")
-//   file("${tumor_id}.def_cval${params.cval_proc2}_CNV.png") optional true
-//   file("${tumor_id}.def_cval${params.cval_proc2}_CNV.pdf") optional true
-//   //we rescue other optional files for diferent cval values
-//   file("${tumor_id}.cval500_stats.txt") optional true into stats_summary_cval500
-//   file("${tumor_id}.cval1000_stats.txt") optional true into stats_summary_cval1000
-//   file("${tumor_id}.cval1500_stats.txt") optional true into stats_summary_cval1500
-//   file("${tumor_id}.cval*.pdf") optional true
-//   file("${tumor_id}.cval*_CNV.txt") optional true
-//
-//
-//   script:
-//   def plot = params.output_pdf ? "PDF":"NOPDF"
-//   def mcval = params.m_cval ?  "MCVAL":"CVAL"
-//   if(params.debug == false){
-//   """
-//   Rscript ${baseDir}/bin/facets.cval.r \\
-//           ${snppileup_counts} \\
-//           ${params.ref} ${params.snp_nbhd} \\
-//           ${params.cval_preproc} ${params.cval_proc1} ${params.cval_proc2} ${params.min_read_count}\\
-//           ${mcval} ${plot}
-//   """
-//    }else{
-//      """
-//     echo Rscript ${baseDir}/bin/facets.cval.r \\
-//              ${snppileup_counts} \\
-//              ${params.ref} ${params.snp_nbhd} \\
-//              ${params.cval_preproc} ${params.cval_proc1} ${params.cval_proc2} ${params.min_read_count}\\
-//              ${mcval} ${plot}
-//       #we touch some dummy file
-//       touch ${tumor_id}.def_cval${params.cval_proc2}_stats.txt
-//       touch ${tumor_id}.def_cval${params.cval_proc2}_CNV.tx
-//       touch ${tumor_id}.def_cval${params.cval_proc2}_CNV_spider.pdf
-//       echo "${tumor_id}\t0.8\t2\t0.8\t0.7" > ${tumor_id}.def_cval${params.cval_proc2}_stats.txt
-//       echo "${tumor_id}\t0.8\t2\t0.8\t0.7" >> ${tumor_id}.def_cval${params.cval_proc2}_stats.txt
-//      """
-//    }
-// }
-//
-// //we store a summary of global variables
-// stats_summary.collectFile(name: 'facets_stats_default_summary.txt', storeDir: params.output_folder, seed: 'Sample \t purity \t ploidy \t dipLogR \t loglik', newLine: true, skip: 1)
-// stats_summary_cval500.collectFile(name: 'facets_stats_cval500_summary.txt', storeDir: params.output_folder, seed: 'Sample \t purity \t ploidy \t dipLogR \t loglik', newLine: true, skip: 1)
-// stats_summary_cval1000.collectFile(name: 'facets_stats_cval1000_summary.txt', storeDir: params.output_folder, seed: 'Sample \t purity \t ploidy \t dipLogR \t loglik', newLine: true, skip: 1)
-// stats_summary_cval1500.collectFile(name: 'facets_stats_cval1500_summary.txt', storeDir: params.output_folder, seed: 'Sample \t purity \t ploidy \t dipLogR \t loglik', newLine: true, skip: 1)
-
 
 /*
 *
@@ -346,6 +249,6 @@ def IARC_Header (){
 # ██║██╔══██║██╔══██╗██║     ██╔══██╗██║██║   ██║██║██║╚██╗██║██╔══╝  ██║   ██║ #
 # ██║██║  ██║██║  ██║╚██████╗██████╔╝██║╚██████╔╝██║██║ ╚████║██║     ╚██████╔╝ #
 # ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝ ╚═════╝╚═════╝ ╚═╝ ╚═════╝ ╚═╝╚═╝  ╚═══╝╚═╝      ╚═════╝  #
-# Nextflow pilelines for cancer genomics.########################################
+# Nextflow pipelines for cancer genomics.########################################
 """
 }
