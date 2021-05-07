@@ -11,59 +11,17 @@ def show_help (){
 
     The typical command for running the pipeline is as follows:
 
-    nextflow run iarcbioinfo/facets-nf -singularity [OPTIONS]
+    nextflow run iarcbioinfo/purple-nf -singularity [OPTIONS]
 
     Mandatory arguments:
-      --tn_file		         [file]  File containing list of T/N bam/cram files to be processed (T.bam, N.bam)
-      --ref                [string] Version of genome: hg19 or hg38 or hg18 [def:hg38]
-      --dbsnp_vcf_ref	     [path] Path to dbsnp vcf reference file (with name of ref file)
-
-    Optional parameters:
-      --analysis_type      [string]  Type of analysis: genome or exome, def: genome
-
-      --snp_nbhd	         [number]	 By default 1000 for genome and 250 for exome
-      --cval_preproc	     [number]	 By default 35 for genome, 25 for exome
-      --cval_proc1	       [number]	 By default 150 for genome, 75 for exome
-      --cval_proc2	       [number]	 By default 300 for genome, 150 for exome
-      --min_read_count	   [number]	 By default 20 for genome, 35 for exome
-
-      --m_cval             [bool]    Use multiple cval values (500,1000,1500) to study the number of segments [def:true]
-
-    SNP-pipelup options:
-      --min-map-quality	   [number]	 Minimum read mapping quality [def:15]
-      --min-base-quality   [number]	 Minimum base quality [def:20]
-      --pseudo-snps        [number]	 window for pseudo-snps [def:100]
-
-
-      Execution options:
-      --snppileup_bin	     [path]		 Path to snppileup software (default: snp-pileup)
-      -profile             [str]     Configuration profile to use (Available: singularity, docker)
-
-    Outputs:
-      --output_folder        [folder]    Folder name for output files (default: ./facets)
-
-    Guest tumor/normal pairs directly from cram/bam files:
-
-      --cram         [bool]         the input are CRAM files [def:false]
-
-      Pairs in separate directories:
-
-      --tumor_dir     [directory]       Directory containing tumor bam/cram files
-      --normal_dir    [directory]       Directory containing normal bam/cram files
-
-      Pairs in the same directory:
-
-      --cohort_dir    [directory]       Directory containing all bam/cram files
-
-      Files suffixes :
-
-      --suffix_tumor	     [STRING]		 tumor file name's specific suffix (by default _T)
-      --suffix_normal	     [STRING]		 normal file name's specific suffix (by default _N)
-
-
-    Visualization :
-
-     --facets_plot [bool]          Facets will generate a PDF output (def:true)
+      --tn_file		         [file] File containing list of T/N bam/cram files to be processed
+      --cohort_dir         [dir]  directory where the BAM or CRAM  file are stored
+      --ref                [file] fasta file of reference genome [hg38.fa]
+      --ref_dict           [file] dict file for the reference genomep [hg38.dict]
+    Optional arguments:
+      --tumor_only         [flag] active tumor_only mode
+      --bam                 [flag] active bam mode [def:cram]
+      --output_folder       [string] name of output folder
 
       """.stripIndent()
 }
@@ -78,128 +36,249 @@ if (params.help){ show_help(); exit 0;}
 log.info IARC_Header()
 log.info tool_header()
 //Check mandatory parameters
-assert (params.ref != null) : "please specify --ref (hg19 or hg38)"
-assert (params.dbsnp_vcf_ref != null) : "please specify --dbsnp_vcf_ref (path to ref)"
-assert (params.tn_file != null || (params.tumor_dir !=null && params.normal_dir!=null)) : "please specify --tn_file or --tumor_dir with --normal_dir (path to ref)"
-if(params.tn_file != null && params.cohort_dir == null){ println "--cohort_dir shold be specified when using the --tn_file variable"; exit 1;}
+assert (params.ref != null) : "please specify --ref reference.fasta"
+assert (params.ref_dict != null) : "please specify --ref_dict reference.dict"
+assert (params.tn_file != null ) : "please specify --tn_file"
+assert (params.cohort_dir != null ) : "please specify --cohort_dir"
 
+//if(params.tn_file != null && params.cohort_dir == null){ println "--cohort_dir shold be specified when using the --tn_file variable"; exit 1;}
 //function that read the tumors to process from a tn_file
 if(params.tn_file){
- tn_pairs = parse_tn_file(params.tn_file,params.cohort_dir,params.cram)
-}else{
- tn_pairs  = build_tn_pairs_from_dir(params.tumor_dir,params.normal_dir,params.suffix_tumor,params.suffix_normal,params.cram)
+  def cram = params.bam ? false:true
+ tn_pairs = parse_tn_file(params.tn_file,params.cohort_dir,cram)
+ //we duplicate the tn_pairs channel
+ tn_pairs.into { tn_pairs_cobalt; tn_pairs_amber}
 }
-
 //chanel for VCF file
-ch_vcf = Channel.value(file(params.dbsnp_vcf_ref)).ifEmpty{exit 1, "VCF file not found: ${params.dbsnp_vcf_ref}"}
+//ch_vcf = Channel.value(file(params.dbsnp_vcf_ref)).ifEmpty{exit 1, "VCF file not found: ${params.dbsnp_vcf_ref}"}
+ref_fasta = Channel.value(file(params.ref)).ifEmpty{exit 1, "reference file not found: ${params.ref}"}
+ref_dict = Channel.value(file(params.ref_dict)).ifEmpty{exit 1, "Dict reference file not found: ${params.ref_dict}"}
 
-//change default for exome
-if (params.analysis_type == "exome"){
-    params.min_read_count = 35
-    params.snp_nbhd = 250
-    params.cval_preproc = 25
-    params.cval_proc1 = 75
-    params.cval_proc2 = 150
-}
 
 print_params()
 
-//we compute the snp_pileup process using 1CPU with low memory
-process snppileup {
-    tag "${tumor_id}-snppileup"
-    label 'load_snpp'
+//PATHS in the container for databases
+// /hmftools/hg38
 
-    input:
-    set val(tumor_id), file(tumor), file(tumor_index), file(normal), file(normal_index) from tn_pairs
-    file(vcf) from ch_vcf
-    output:
-    set val(tumor_id), file("${tumor_id}.csv.gz") into snppileup_result
+// /hmftools/hg38/DiploidRegions.38.bed
+// /hmftools/hg38/GC_profile.1000bp.38.cnp
+// /hmftools/hg38/GermlineHetPon.38.vcf
 
-    script:
-    if(params.debug == false){
-    """
-      ${params.snppileup_bin} \\
-      --gzip \\
-      --min-map-quality ${params.min_map_quality} \\
-      --min-base-quality ${params.min_base_quality} \\
-      --pseudo-snps ${params.pseudo_snps} \\
-      --min-read-counts ${params.min_read_count} \\
-       ${vcf} ${tumor_id}.csv.gz ${normal} ${tumor}
-    """
-   }else{
-     """
-       echo ${params.snppileup_bin} \\
-       --gzip \\
-       --min-map-quality ${params.min_map_quality} \\
-       --min-base-quality ${params.min_base_quality} \\
-       --pseudo-snps ${params.pseudo_snps} \\
-       --min-read-counts ${params.min_read_count} \\
-        ${vcf} ${tumor_id}.csv.gz ${normal} ${tumor}
-      #we create the file to continue our process
-      touch ${tumor_id}.csv.gz
-     """
-   }
+process COBALT {
+
+  publishDir params.output_folder+'/COBALT/', mode: 'copy'
+  input:
+  set val(tumor_id), file(tumor), file(tumor_index), file(normal), file(normal_index) from tn_pairs_cobalt
+  file(ref) from ref_fasta
+  file(dict) from ref_dict
+  output:
+  set val(tumor_id), path("${tumor_id}_COBALT") into cobalt
+  script:
+     if(params.tumor_only == false){
+       """
+      echo COBALT -gc_profile /hmftools/hg38/GC_profile.1000bp.38.cnp \
+              -ref_genome ${ref} -tumor_only -tumor_only_diploid_bed /hmftools/hg38/DiploidRegions.38.bed \
+     	        -tumor  ${tumor_id}_T -tumor_bam ${tumor} -output_dir ${tumor_id}_COBALT -threads 1
+        mkdir ${tumor_id}_COBALT
+        touch ${tumor_id}_COBALT/test.f1 ${tumor_id}_COBALT/test.f2
+       """
+     }else{
+       """
+       echo COBALT -gc_profile /hmftools/hg38/GC_profile.1000bp.38.cnp \
+              -ref_genome ${ref} -reference ${tumor_id}_N -reference_bam ${normal} \
+     	        -tumor  ${tumor_id}_T -tumor_bam ${tumor} -output_dir ${tumor_id}_COBALT -threads 1
+        mkdir ${tumor_id}_COBALT
+        touch ${tumor_id}_COBALT/test.f1 ${tumor_id}_COBALT/test.f2
+       """
+     }
+
 }
 
-//we run FACETs with the create file
+process AMBER {
 
-process facets{
-  tag "${tumor_id}-facets"
-  label 'load_facets'
-
-  publishDir params.output_folder+'/facets/', mode: 'copy'
-
+  publishDir params.output_folder+'/AMBER/', mode: 'copy'
   input:
-  set val(tumor_id), file(snppileup_counts) from snppileup_result
-
+  set val(tumor_id), file(tumor), file(tumor_index), file(normal), file(normal_index) from tn_pairs_amber
+  file(ref) from ref_fasta
+  file(dict) from ref_dict
   output:
-  file("${tumor_id}.def_cval${params.cval_proc2}_stats.txt") into stats_summary
-  file("${tumor_id}.def_cval${params.cval_proc2}_CNV.txt")
-  file("${tumor_id}.def_cval${params.cval_proc2}_CNV_spider.pdf")
-  file("${tumor_id}.R_sessionInfo.txt")
-  file("${tumor_id}.def_cval${params.cval_proc2}_CNV.png") optional true
-  file("${tumor_id}.def_cval${params.cval_proc2}_CNV.pdf") optional true
-  //we rescue other optional files for diferent cval values
-  file("${tumor_id}.cval500_stats.txt") optional true into stats_summary_cval500
-  file("${tumor_id}.cval1000_stats.txt") optional true into stats_summary_cval1000
-  file("${tumor_id}.cval1500_stats.txt") optional true into stats_summary_cval1500
-  file("${tumor_id}.cval*.pdf") optional true
-  file("${tumor_id}.cval*_CNV.txt") optional true
+  set val(tumor_id), path("${tumor_id}_AMBER") into amber
+  script:
+     if(params.tumor_only == false){
+       """
+      echo AMBER  -loci /hmftools/hg38/GermlineHetPon.38.vcf -ref_genome ${ref} -tumor_only \
+              -tumor  ${tumor_id}_T -tumor_bam ${tumor} -output_dir ${tumor_id}_AMBER -threads 1
+              mkdir ${tumor_id}_AMBER
+              touch ${tumor_id}_AMBER/test.f1 ${tumor_id}_AMBER/test.f2
+       """
+     }else{
+       """
+        echo AMBER  -loci /hmftools/hg38/GermlineHetPon.38.vcf -ref_genome ${ref} \
+               -reference ${tumor_id}_N -reference_bam ${normal}  \
+               -tumor  ${tumor_id}_T -tumor_bam ${tumor} -output_dir ${tumor_id}_AMBER -threads 1
+        mkdir ${tumor_id}_AMBER
+        touch ${tumor_id}_AMBER/test.f1 ${tumor_id}_AMBER/test.f2
+       """
+     }
 
+}
+//we merge previous results from amber and cobalt
+amber_cobalt=amber.join(cobalt, remainder: true)
+
+process PURPLE {
+
+  publishDir params.output_folder+'/PURPLE/', mode: 'copy'
+  input:
+  //set val(tumor_id), file(tumor), file(tumor_index), file(normal), file(normal_index) from tn_pairs_amber
+  set val(tumor_id), path(amber_dir), path(cobalt_dir) from amber_cobalt
+  file(ref) from ref_fasta
+  file(dict) from ref_dict
+  output:
+  set val(tumor_id), path("${tumor_id}_PURPLE") into purple
+  //MESO_071_T_T.purple.purity.tsv
+  //set val(tumor_id), file("${tumor_id}_PURPLE/${tumor_id}_T.purple.purity.tsv") into stats_purple
+  file("${tumor_id}_PURPLE/${tumor_id}_T.purple.purity.sample.tsv") into stats_purple
 
   script:
-  def plot = params.output_pdf ? "PDF":"NOPDF"
-  def mcval = params.m_cval ?  "MCVAL":"CVAL"
-  if(params.debug == false){
-  """
-  Rscript ${baseDir}/bin/facets.cval.r \\
-          ${snppileup_counts} \\
-          ${params.ref} ${params.snp_nbhd} \\
-          ${params.cval_preproc} ${params.cval_proc1} ${params.cval_proc2} ${params.min_read_count}\\
-          ${mcval} ${plot}
-  """
-   }else{
-     """
-    echo Rscript ${baseDir}/bin/facets.cval.r \\
-             ${snppileup_counts} \\
-             ${params.ref} ${params.snp_nbhd} \\
-             ${params.cval_preproc} ${params.cval_proc1} ${params.cval_proc2} ${params.min_read_count}\\
-             ${mcval} ${plot}
-      #we touch some dummy file
-      touch ${tumor_id}.def_cval${params.cval_proc2}_stats.txt
-      touch ${tumor_id}.def_cval${params.cval_proc2}_CNV.tx
-      touch ${tumor_id}.def_cval${params.cval_proc2}_CNV_spider.pdf
-      echo "${tumor_id}\t0.8\t2\t0.8\t0.7" > ${tumor_id}.def_cval${params.cval_proc2}_stats.txt
-      echo "${tumor_id}\t0.8\t2\t0.8\t0.7" >> ${tumor_id}.def_cval${params.cval_proc2}_stats.txt
-     """
-   }
+     if(params.tumor_only == false){
+       """
+      echo PURPLE -reference ${tumor_id}_N  -tumor ${tumor_id}_T \
+              -no_charts \
+              -output_dir ${tumor_id}_PURPLE \
+              -amber ${amber_dir} \
+              -cobalt ${cobalt_dir} \
+              -gc_profile /hmftools/hg38/GC_profile.1000bp.38.cnp \
+              -threads 1 \
+              -ref_genome ${ref}
+
+              mkdir ${tumor_id}_PURPLE
+              touch ${tumor_id}_PURPLE/test.f1 ${tumor_id}_PURPLE/test.f2
+              touch ${tumor_id}_PURPLE/${tumor_id}_T.purple.purity.tsv
+              echo "t2\t3\t4" > ${tumor_id}_PURPLE/${tumor_id}_T.purple.purity.tsv
+              echo "t2\t3\t4" >> ${tumor_id}_PURPLE/${tumor_id}_T.purple.purity.tsv
+              awk -v tumor=${tumor_id} '{print tumor"\t"\$0}' ${tumor_id}_PURPLE/${tumor_id}_T.purple.purity.tsv > ${tumor_id}_PURPLE/${tumor_id}_T.purple.purity.sample.tsv
+              #echo "${tumor_id}\tt2\t3\t4" >> ${tumor_id}_PURPLE/${tumor_id}_T.purple.purity.tsv
+       """
+     }else{
+       """
+       echo PURPLE  -tumor_only  -tumor ${tumor_id}_T \
+               -no_charts \
+               -output_dir ${tumor_id}_PURPLE \
+               -amber ${amber_dir} \
+               -cobalt ${cobalt_dir} \
+               -gc_profile /hmftools/hg38/GC_profile.1000bp.38.cnp \
+               -threads 1 \
+               -ref_genome ${ref}
+
+               mkdir ${tumor_id}_PURPLE
+               touch ${tumor_id}_PURPLE/test.f1 ${tumor_id}_PURPLE/test.f2
+               echo "t2\t3\t4" > ${tumor_id}_PURPLE/${tumor_id}_T.purple.purity.tsv
+               echo "t2\t3\t4" >> ${tumor_id}_PURPLE/${tumor_id}_T.purple.purity.tsv
+               awk -v tumor=${tumor_id} '{print tumor"\t"\$0}' ${tumor_id}_PURPLE/${tumor_id}_T.purple.purity.tsv > ${tumor_id}_PURPLE/${tumor_id}_T.purple.purity.sample.tsv
+
+       """
+     }
+
 }
 
-//we store a summary of global variables
-stats_summary.collectFile(name: 'facets_stats_default_summary.txt', storeDir: params.output_folder, seed: 'Sample \t purity \t ploidy \t dipLogR \t loglik', newLine: true, skip: 1)
-stats_summary_cval500.collectFile(name: 'facets_stats_cval500_summary.txt', storeDir: params.output_folder, seed: 'Sample \t purity \t ploidy \t dipLogR \t loglik', newLine: true, skip: 1)
-stats_summary_cval1000.collectFile(name: 'facets_stats_cval1000_summary.txt', storeDir: params.output_folder, seed: 'Sample \t purity \t ploidy \t dipLogR \t loglik', newLine: true, skip: 1)
-stats_summary_cval1500.collectFile(name: 'facets_stats_cval1500_summary.txt', storeDir: params.output_folder, seed: 'Sample \t purity \t ploidy \t dipLogR \t loglik', newLine: true, skip: 1)
+stats_purple.collectFile(name: 'purple_summary.txt', storeDir: params.output_folder, seed: 'tumor_id\tpurity\tnormFactor\tscore\tdiploidProportion\tploidy\tgender\tstatus\tpolyclonalProportion\tminPurity\tmaxPurity\tminPloidy\tmaxPloidy\tminDiploidProportion\tmaxDiploidProportion\tversion\tsomaticPenalty\twholeGenomeDuplication\tmsIndelsPerMb\tmsStatus\ttml\ttmlStatus\ttmbPerMb\ttmbStatus\tsvTumorMutationalBurden\n', newLine: false, skip: 1)
+
+// //we compute the snp_pileup process using 1CPU with low memory
+// process snppileup {
+//     tag "${tumor_id}-snppileup"
+//     label 'load_snpp'
+//
+//     input:
+//     set val(tumor_id), file(tumor), file(tumor_index), file(normal), file(normal_index) from tn_pairs
+//     file(vcf) from ch_vcf
+//     output:
+//     set val(tumor_id), file("${tumor_id}.csv.gz") into snppileup_result
+//
+//     script:
+//     if(params.debug == false){
+//     """
+//       ${params.snppileup_bin} \\
+//       --gzip \\
+//       --min-map-quality ${params.min_map_quality} \\
+//       --min-base-quality ${params.min_base_quality} \\
+//       --pseudo-snps ${params.pseudo_snps} \\
+//       --min-read-counts ${params.min_read_count} \\
+//        ${vcf} ${tumor_id}.csv.gz ${normal} ${tumor}
+//     """
+//    }else{
+//      """
+//        echo ${params.snppileup_bin} \\
+//        --gzip \\
+//        --min-map-quality ${params.min_map_quality} \\
+//        --min-base-quality ${params.min_base_quality} \\
+//        --pseudo-snps ${params.pseudo_snps} \\
+//        --min-read-counts ${params.min_read_count} \\
+//         ${vcf} ${tumor_id}.csv.gz ${normal} ${tumor}
+//       #we create the file to continue our process
+//       touch ${tumor_id}.csv.gz
+//      """
+//    }
+// }
+//
+// //we run FACETs with the create file
+//
+// process facets{
+//   tag "${tumor_id}-facets"
+//   label 'load_facets'
+//
+//   publishDir params.output_folder+'/facets/', mode: 'copy'
+//
+//   input:
+//   set val(tumor_id), file(snppileup_counts) from snppileup_result
+//
+//   output:
+//   file("${tumor_id}.def_cval${params.cval_proc2}_stats.txt") into stats_summary
+//   file("${tumor_id}.def_cval${params.cval_proc2}_CNV.txt")
+//   file("${tumor_id}.def_cval${params.cval_proc2}_CNV_spider.pdf")
+//   file("${tumor_id}.R_sessionInfo.txt")
+//   file("${tumor_id}.def_cval${params.cval_proc2}_CNV.png") optional true
+//   file("${tumor_id}.def_cval${params.cval_proc2}_CNV.pdf") optional true
+//   //we rescue other optional files for diferent cval values
+//   file("${tumor_id}.cval500_stats.txt") optional true into stats_summary_cval500
+//   file("${tumor_id}.cval1000_stats.txt") optional true into stats_summary_cval1000
+//   file("${tumor_id}.cval1500_stats.txt") optional true into stats_summary_cval1500
+//   file("${tumor_id}.cval*.pdf") optional true
+//   file("${tumor_id}.cval*_CNV.txt") optional true
+//
+//
+//   script:
+//   def plot = params.output_pdf ? "PDF":"NOPDF"
+//   def mcval = params.m_cval ?  "MCVAL":"CVAL"
+//   if(params.debug == false){
+//   """
+//   Rscript ${baseDir}/bin/facets.cval.r \\
+//           ${snppileup_counts} \\
+//           ${params.ref} ${params.snp_nbhd} \\
+//           ${params.cval_preproc} ${params.cval_proc1} ${params.cval_proc2} ${params.min_read_count}\\
+//           ${mcval} ${plot}
+//   """
+//    }else{
+//      """
+//     echo Rscript ${baseDir}/bin/facets.cval.r \\
+//              ${snppileup_counts} \\
+//              ${params.ref} ${params.snp_nbhd} \\
+//              ${params.cval_preproc} ${params.cval_proc1} ${params.cval_proc2} ${params.min_read_count}\\
+//              ${mcval} ${plot}
+//       #we touch some dummy file
+//       touch ${tumor_id}.def_cval${params.cval_proc2}_stats.txt
+//       touch ${tumor_id}.def_cval${params.cval_proc2}_CNV.tx
+//       touch ${tumor_id}.def_cval${params.cval_proc2}_CNV_spider.pdf
+//       echo "${tumor_id}\t0.8\t2\t0.8\t0.7" > ${tumor_id}.def_cval${params.cval_proc2}_stats.txt
+//       echo "${tumor_id}\t0.8\t2\t0.8\t0.7" >> ${tumor_id}.def_cval${params.cval_proc2}_stats.txt
+//      """
+//    }
+// }
+//
+// //we store a summary of global variables
+// stats_summary.collectFile(name: 'facets_stats_default_summary.txt', storeDir: params.output_folder, seed: 'Sample \t purity \t ploidy \t dipLogR \t loglik', newLine: true, skip: 1)
+// stats_summary_cval500.collectFile(name: 'facets_stats_cval500_summary.txt', storeDir: params.output_folder, seed: 'Sample \t purity \t ploidy \t dipLogR \t loglik', newLine: true, skip: 1)
+// stats_summary_cval1000.collectFile(name: 'facets_stats_cval1000_summary.txt', storeDir: params.output_folder, seed: 'Sample \t purity \t ploidy \t dipLogR \t loglik', newLine: true, skip: 1)
+// stats_summary_cval1500.collectFile(name: 'facets_stats_cval1500_summary.txt', storeDir: params.output_folder, seed: 'Sample \t purity \t ploidy \t dipLogR \t loglik', newLine: true, skip: 1)
 
 
 /*
@@ -208,46 +287,10 @@ stats_summary_cval1500.collectFile(name: 'facets_stats_cval1500_summary.txt', st
 *
 */
 
-//funtion that return the tn_bambai channel from a set of paths
-def build_tn_pairs_from_dir(tumor_dir,normal_dir,suffix_tumor,suffix_normal,is_cram){
-    //we parse the tumor file and the normal files
-    def tumor_files = parse_files_dir(tumor_dir,suffix_tumor,is_cram)
-    def normal_files = parse_files_dir(normal_dir,suffix_normal,is_cram)
-    //we create the tumor normal pairs Channel with index and sample names
-    def tn_pairs = tumor_files.join(normal_files)
-    return tn_pairs
-}
-
-//this function load a BAM/CRAM along with the index for each file
-def parse_files_dir(dir, suffix, is_cram){
-
-  def regex= is_cram ? ".*cram":".*bam"
-  def file_ext = is_cram ? '.cram':'.bam'
-  def file_index = is_cram ? '.crai':'.bai'
-
-   try { assert file(dir).exists() : "\n WARNING : input tumor BAM folder not located in execution directory" }
-   catch (AssertionError e) { println e.getMessage() }
-   assert file(dir).listFiles().findAll { it.name ==~ /${regex}/ }.size() > 0 : "tumor BAM folder contains no BAM"
-
-
-  def  alignments = Channel.fromPath( dir+'/*'+suffix+file_ext )
- 		    .ifEmpty { error "Cannot find any bam/cram file in: ${dir}" }
- 		    .map {  path -> [ path.name.replace("${suffix}${file_ext}",""), path ] }
-
-    // recovering of bai files
-  def alignments_index = Channel.fromPath( dir+'/*'+suffix+file_ext+file_index)
-  		    .ifEmpty { error "Cannot find any bai file in: ${dir}" }
-  		    .map {  path -> [ path.name.replace("${suffix}${file_ext}${file_index}",""), path ] }
-
-  def aln_index = alignments.join(alignments_index)
-
-  return aln_index
-}
-
 //we read the pairs from tn_file
-def parse_tn_file (tn_file,path,is_bam){
+def parse_tn_file (tn_file,path,cram){
 	    // FOR INPUT AS A TAB DELIMITED FILE
-			def file_ext = is_bam ? '.bai':'.crai'
+			def file_ext = cram ? '.crai':'.bai'
 			//[sample t[.bam,cram] t[.bai,crai] n[.bam,.cram] n[.bai,.crai]]
     def tn_pairs=Channel.fromPath(tn_file)
       .splitCsv(header: true, sep: '\t', strip: true)
@@ -264,12 +307,9 @@ def parse_tn_file (tn_file,path,is_bam){
 // print the calling parameter to the log and a log file
 def print_params () {
   //software versions for v2.0
-  def software_versions = ['snp-pileup' : '0.5.14',
-                          'r-base'   : '4.0.3',
-                          'data.table' : '1.13.2' ,
-                          'facets'     :'0.5.14',
-                          'pctGCdata'  :'0.2.0' ]
-
+  def software_versions = ['hmftools-cobalt' : '1.11',
+                          'hmftools-amber'   : '2.52',
+                          'hmftools-purple' : '3.5' ]
   //we print the parameters
   log.info "\n"
   log.info "-\033[2m------------------Calling PARAMETERS--------------------\033[0m-"
