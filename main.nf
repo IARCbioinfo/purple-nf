@@ -53,6 +53,7 @@ if(params.tn_file){
 //ch_vcf = Channel.value(file(params.dbsnp_vcf_ref)).ifEmpty{exit 1, "VCF file not found: ${params.dbsnp_vcf_ref}"}
 ref_fasta = Channel.value(file(params.ref)).ifEmpty{exit 1, "reference file not found: ${params.ref}"}
 ref_dict = Channel.value(file(params.ref_dict)).ifEmpty{exit 1, "Dict reference file not found: ${params.ref_dict}"}
+ref_fai = Channel.value(file(params.ref+'.fai')).ifEmpty{exit 1, "index file not found: ${params.ref}.fai"}
 
 
 print_params()
@@ -71,19 +72,21 @@ process COBALT {
   set val(tumor_id), file(tumor), file(tumor_index), file(normal), file(normal_index) from tn_pairs_cobalt
   file(ref) from ref_fasta
   file(dict) from ref_dict
+  file(fai) from ref_fai
+
   output:
   set val(tumor_id), path("${tumor_id}_COBALT") into cobalt
   script:
      if(params.tumor_only){
        """
-      COBALT -gc_profile /hmftools/hg38/GC_profile.1000bp.38.cnp \
-              -ref_genome ${ref} -tumor_only -tumor_only_diploid_bed /hmftools/hg38/DiploidRegions.38.bed \
+      COBALT -gc_profile /hmftools/hg38/GC_profile.1000bp.38.cnp \\
+              -ref_genome ${ref} -tumor_only -tumor_only_diploid_bed /hmftools/hg38/DiploidRegions.38.bed \\
      	        -tumor  ${tumor_id}_T -tumor_bam ${tumor} -output_dir ${tumor_id}_COBALT -threads 1
        """
      }else{
        """
-      COBALT -gc_profile /hmftools/hg38/GC_profile.1000bp.38.cnp \
-              -ref_genome ${ref} -reference ${tumor_id}_N -reference_bam ${normal} \
+      COBALT -gc_profile /hmftools/hg38/GC_profile.1000bp.38.cnp \\
+              -ref_genome ${ref} -reference ${tumor_id}_N -reference_bam ${normal} \\
      	        -tumor  ${tumor_id}_T -tumor_bam ${tumor} -output_dir ${tumor_id}_COBALT -threads 1
       """
      }
@@ -97,18 +100,19 @@ process AMBER {
   set val(tumor_id), file(tumor), file(tumor_index), file(normal), file(normal_index) from tn_pairs_amber
   file(ref) from ref_fasta
   file(dict) from ref_dict
+  file(fai) from ref_fai
   output:
   set val(tumor_id), path("${tumor_id}_AMBER") into amber
   script:
      if(params.tumor_only){
        """
-      AMBER  -loci /hmftools/hg38/GermlineHetPon.38.vcf -ref_genome ${ref} -tumor_only \
+      AMBER  -loci /hmftools/hg38/GermlineHetPon.38.vcf -ref_genome ${ref} -tumor_only \\
               -tumor  ${tumor_id}_T -tumor_bam ${tumor} -output_dir ${tumor_id}_AMBER -threads 1
       """
      }else{
        """
-       AMBER  -loci /hmftools/hg38/GermlineHetPon.38.vcf -ref_genome ${ref} \
-               -reference ${tumor_id}_N -reference_bam ${normal}  \
+       AMBER  -loci /hmftools/hg38/GermlineHetPon.38.vcf -ref_genome ${ref} \\
+               -reference ${tumor_id}_N -reference_bam ${normal}  \\
                -tumor  ${tumor_id}_T -tumor_bam ${tumor} -output_dir ${tumor_id}_AMBER -threads 1
         """
      }
@@ -125,6 +129,7 @@ process PURPLE {
   set val(tumor_id), path(amber_dir), path(cobalt_dir) from amber_cobalt
   file(ref) from ref_fasta
   file(dict) from ref_dict
+  file(fai) from ref_fai
   output:
   set val(tumor_id), path("${tumor_id}_PURPLE") into purple
   //MESO_071_T_T.purple.purity.tsv
@@ -134,13 +139,13 @@ process PURPLE {
   script:
      if(params.tumor_only){
        """
-       PURPLE  -tumor_only  -tumor ${tumor_id}_T \
-               -no_charts \
-               -output_dir ${tumor_id}_PURPLE \
-               -amber ${amber_dir} \
-               -cobalt ${cobalt_dir} \
-               -gc_profile /hmftools/hg38/GC_profile.1000bp.38.cnp \
-               -threads 1 \
+       PURPLE  -tumor_only  -tumor ${tumor_id}_T \\
+               -no_charts \\
+               -output_dir ${tumor_id}_PURPLE \\
+               -amber ${amber_dir} \\
+               -cobalt ${cobalt_dir} \\
+               -gc_profile /hmftools/hg38/GC_profile.1000bp.38.cnp \\
+               -threads 1 \\
                -ref_genome ${ref}
 
         awk -v tumor=${tumor_id} '{print tumor"\t"\$0}' ${tumor_id}_PURPLE/${tumor_id}_T.purple.purity.tsv > ${tumor_id}_PURPLE/${tumor_id}_T.purple.purity.sample.tsv
@@ -148,13 +153,13 @@ process PURPLE {
        """
      }else{
        """
-        PURPLE -reference ${tumor_id}_N  -tumor ${tumor_id}_T \
-               -no_charts \
-               -output_dir ${tumor_id}_PURPLE \
-               -amber ${amber_dir} \
-               -cobalt ${cobalt_dir} \
-               -gc_profile /hmftools/hg38/GC_profile.1000bp.38.cnp \
-               -threads 1 \
+        PURPLE -reference ${tumor_id}_N  -tumor ${tumor_id}_T \\
+               -no_charts \\
+               -output_dir ${tumor_id}_PURPLE \\
+               -amber ${amber_dir} \\
+               -cobalt ${cobalt_dir} \\
+               -gc_profile /hmftools/hg38/GC_profile.1000bp.38.cnp \\
+               -threads 1 \\
                -ref_genome ${ref}
 
                awk -v tumor=${tumor_id} '{print tumor"\t"\$0}' ${tumor_id}_PURPLE/${tumor_id}_T.purple.purity.tsv > ${tumor_id}_PURPLE/${tumor_id}_T.purple.purity.sample.tsv
