@@ -22,6 +22,8 @@ def show_help (){
       --tumor_only         [flag] active tumor_only mode
       --bam                 [flag] active bam mode [def:cram]
       --output_folder       [string] name of output folder
+      --cpu                [Integer]  Number of CPUs[def:2]
+      --mem 		   [Integer] Max memory [def:8Gb]	
 
       """.stripIndent()
 }
@@ -67,6 +69,10 @@ print_params()
 
 process COBALT {
 
+ cpus params.cpu
+ memory params.mem+'G'	
+
+
   publishDir params.output_folder+'/COBALT/', mode: 'copy'
   input:
   set val(tumor_id), file(tumor), file(tumor_index), file(normal), file(normal_index) from tn_pairs_cobalt
@@ -79,21 +85,26 @@ process COBALT {
   script:
      if(params.tumor_only){
        """
-      COBALT  -Xms1g -Xmx15g -gc_profile /hmftools/hg38/GC_profile.1000bp.38.cnp \\
+      COBALT  -Xms1g -Xmx${params.mem}g -gc_profile /hmftools/hg38/GC_profile.1000bp.38.cnp \\
               -ref_genome ${ref} -tumor_only -tumor_only_diploid_bed /hmftools/hg38/DiploidRegions.38.bed \\
-     	        -tumor  ${tumor_id}_T -tumor_bam ${tumor} -output_dir ${tumor_id}_COBALT -threads 1
+     	        -tumor  ${tumor_id}_T -tumor_bam ${tumor} -output_dir ${tumor_id}_COBALT -threads ${params.cpu}
        """
      }else{
        """
-      COBALT  -Xms1g -Xmx15g -gc_profile /hmftools/hg38/GC_profile.1000bp.38.cnp \\
+      COBALT  -Xms1g -Xmx${params.mem}g -gc_profile /hmftools/hg38/GC_profile.1000bp.38.cnp \\
               -ref_genome ${ref} -reference ${tumor_id}_N -reference_bam ${normal} \\
-     	        -tumor  ${tumor_id}_T -tumor_bam ${tumor} -output_dir ${tumor_id}_COBALT -threads 1
+     	        -tumor  ${tumor_id}_T -tumor_bam ${tumor} -output_dir ${tumor_id}_COBALT -threads ${params.cpu}
       """
      }
 
 }
 
 process AMBER {
+
+ cpus params.cpu
+ memory params.mem+'G'	
+
+
 
   publishDir params.output_folder+'/AMBER/', mode: 'copy'
   input:
@@ -106,14 +117,14 @@ process AMBER {
   script:
      if(params.tumor_only){
        """
-      AMBER  -Xms1g -Xmx15g  -loci /hmftools/hg38/GermlineHetPon.38.vcf -ref_genome ${ref} -tumor_only \\
-              -tumor  ${tumor_id}_T -tumor_bam ${tumor} -output_dir ${tumor_id}_AMBER -threads 1
+      AMBER  -Xms1g -Xmx${params.mem}g  -loci /hmftools/hg38/GermlineHetPon.38.vcf -ref_genome ${ref} -tumor_only \\
+              -tumor  ${tumor_id}_T -tumor_bam ${tumor} -output_dir ${tumor_id}_AMBER -threads ${params.cpu}
       """
      }else{
        """
-       AMBER   -Xms1g -Xmx15g -loci /hmftools/hg38/GermlineHetPon.38.vcf -ref_genome ${ref} \\
+       AMBER   -Xms1g -Xmx${params.mem}g -loci /hmftools/hg38/GermlineHetPon.38.vcf -ref_genome ${ref} \\
                -reference ${tumor_id}_N -reference_bam ${normal}  \\
-               -tumor  ${tumor_id}_T -tumor_bam ${tumor} -output_dir ${tumor_id}_AMBER -threads 1
+               -tumor  ${tumor_id}_T -tumor_bam ${tumor} -output_dir ${tumor_id}_AMBER -threads ${params.cpu}
         """
      }
 
@@ -122,6 +133,10 @@ process AMBER {
 amber_cobalt=amber.join(cobalt, remainder: true)
 
 process PURPLE {
+
+ cpus params.cpu
+ memory params.mem+'G'	
+
 
   publishDir params.output_folder+'/PURPLE/', mode: 'copy'
   input:
@@ -139,13 +154,13 @@ process PURPLE {
   script:
      if(params.tumor_only){
        """
-       PURPLE  -Xms1g -Xmx15g -tumor_only  -tumor ${tumor_id}_T \\
+       PURPLE  -Xms1g -Xmx${params.mem}g -tumor_only  -tumor ${tumor_id}_T \\
                -no_charts \\
                -output_dir ${tumor_id}_PURPLE \\
                -amber ${amber_dir} \\
                -cobalt ${cobalt_dir} \\
                -gc_profile /hmftools/hg38/GC_profile.1000bp.38.cnp \\
-               -threads 1 \\
+               -threads ${params.cpu} \\
                -ref_genome ${ref}
 
         awk -v tumor=${tumor_id} '{print tumor"\t"\$0}' ${tumor_id}_PURPLE/${tumor_id}_T.purple.purity.tsv > ${tumor_id}_PURPLE/${tumor_id}_T.purple.purity.sample.tsv
@@ -153,13 +168,13 @@ process PURPLE {
        """
      }else{
        """
-        PURPLE  -Xms1g -Xmx15g -reference ${tumor_id}_N  -tumor ${tumor_id}_T \\
+        PURPLE  -Xms1g -Xmx${params.mem}g -reference ${tumor_id}_N  -tumor ${tumor_id}_T \\
                -no_charts \\
                -output_dir ${tumor_id}_PURPLE \\
                -amber ${amber_dir} \\
                -cobalt ${cobalt_dir} \\
                -gc_profile /hmftools/hg38/GC_profile.1000bp.38.cnp \\
-               -threads 1 \\
+               -threads ${params.cpu} \\
                -ref_genome ${ref}
 
                awk -v tumor=${tumor_id} '{print tumor"\t"\$0}' ${tumor_id}_PURPLE/${tumor_id}_T.purple.purity.tsv > ${tumor_id}_PURPLE/${tumor_id}_T.purple.purity.sample.tsv
