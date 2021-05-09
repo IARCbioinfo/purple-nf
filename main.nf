@@ -79,13 +79,13 @@ process COBALT {
   script:
      if(params.tumor_only){
        """
-      COBALT -gc_profile /hmftools/hg38/GC_profile.1000bp.38.cnp \\
+      COBALT  -Xms1g -Xmx15g -gc_profile /hmftools/hg38/GC_profile.1000bp.38.cnp \\
               -ref_genome ${ref} -tumor_only -tumor_only_diploid_bed /hmftools/hg38/DiploidRegions.38.bed \\
      	        -tumor  ${tumor_id}_T -tumor_bam ${tumor} -output_dir ${tumor_id}_COBALT -threads 1
        """
      }else{
        """
-      COBALT -gc_profile /hmftools/hg38/GC_profile.1000bp.38.cnp \\
+      COBALT  -Xms1g -Xmx15g -gc_profile /hmftools/hg38/GC_profile.1000bp.38.cnp \\
               -ref_genome ${ref} -reference ${tumor_id}_N -reference_bam ${normal} \\
      	        -tumor  ${tumor_id}_T -tumor_bam ${tumor} -output_dir ${tumor_id}_COBALT -threads 1
       """
@@ -106,12 +106,12 @@ process AMBER {
   script:
      if(params.tumor_only){
        """
-      AMBER  -loci /hmftools/hg38/GermlineHetPon.38.vcf -ref_genome ${ref} -tumor_only \\
+      AMBER  -Xms1g -Xmx15g  -loci /hmftools/hg38/GermlineHetPon.38.vcf -ref_genome ${ref} -tumor_only \\
               -tumor  ${tumor_id}_T -tumor_bam ${tumor} -output_dir ${tumor_id}_AMBER -threads 1
       """
      }else{
        """
-       AMBER  -loci /hmftools/hg38/GermlineHetPon.38.vcf -ref_genome ${ref} \\
+       AMBER   -Xms1g -Xmx15g -loci /hmftools/hg38/GermlineHetPon.38.vcf -ref_genome ${ref} \\
                -reference ${tumor_id}_N -reference_bam ${normal}  \\
                -tumor  ${tumor_id}_T -tumor_bam ${tumor} -output_dir ${tumor_id}_AMBER -threads 1
         """
@@ -139,7 +139,7 @@ process PURPLE {
   script:
      if(params.tumor_only){
        """
-       PURPLE  -tumor_only  -tumor ${tumor_id}_T \\
+       PURPLE  -Xms1g -Xmx15g -tumor_only  -tumor ${tumor_id}_T \\
                -no_charts \\
                -output_dir ${tumor_id}_PURPLE \\
                -amber ${amber_dir} \\
@@ -153,7 +153,7 @@ process PURPLE {
        """
      }else{
        """
-        PURPLE -reference ${tumor_id}_N  -tumor ${tumor_id}_T \\
+        PURPLE  -Xms1g -Xmx15g -reference ${tumor_id}_N  -tumor ${tumor_id}_T \\
                -no_charts \\
                -output_dir ${tumor_id}_PURPLE \\
                -amber ${amber_dir} \\
