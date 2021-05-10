@@ -137,8 +137,8 @@ process PURPLE {
  cpus params.cpu
  memory params.mem+'G'	
 
-
   publishDir params.output_folder+'/PURPLE/', mode: 'copy'
+
   input:
   //set val(tumor_id), file(tumor), file(tumor_index), file(normal), file(normal_index) from tn_pairs_amber
   set val(tumor_id), path(amber_dir), path(cobalt_dir) from amber_cobalt
@@ -149,7 +149,7 @@ process PURPLE {
   set val(tumor_id), path("${tumor_id}_PURPLE") into purple
   //MESO_071_T_T.purple.purity.tsv
   //set val(tumor_id), file("${tumor_id}_PURPLE/${tumor_id}_T.purple.purity.tsv") into stats_purple
-  file("${tumor_id}_PURPLE/${tumor_id}_T.purple.purity.sample.tsv") into stats_purple
+  file("${tumor_id}_T.purple.purity.sample.tsv") into stats_purple
 
   script:
      if(params.tumor_only){
@@ -163,7 +163,7 @@ process PURPLE {
                -threads ${params.cpu} \\
                -ref_genome ${ref}
 
-        awk -v tumor=${tumor_id} '{print tumor"\t"\$0}' ${tumor_id}_PURPLE/${tumor_id}_T.purple.purity.tsv > ${tumor_id}_PURPLE/${tumor_id}_T.purple.purity.sample.tsv
+        awk -v tumor=${tumor_id} '{print tumor"\t"\$0}' ${tumor_id}_PURPLE/${tumor_id}_T.purple.purity.tsv > ${tumor_id}_T.purple.purity.sample.tsv
 
        """
      }else{
@@ -177,7 +177,7 @@ process PURPLE {
                -threads ${params.cpu} \\
                -ref_genome ${ref}
 
-               awk -v tumor=${tumor_id} '{print tumor"\t"\$0}' ${tumor_id}_PURPLE/${tumor_id}_T.purple.purity.tsv > ${tumor_id}_PURPLE/${tumor_id}_T.purple.purity.sample.tsv
+               awk -v tumor=${tumor_id} '{print tumor"\t"\$0}' ${tumor_id}_PURPLE/${tumor_id}_T.purple.purity.tsv > ${tumor_id}_T.purple.purity.sample.tsv
        """
      }
 
