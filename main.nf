@@ -16,8 +16,7 @@ def show_help (){
     Mandatory arguments:
       --tn_file		         [file] File containing list of T/N bam/cram files to be processed
       --cohort_dir         [dir]  directory where the BAM or CRAM  file are stored
-      --ref                [file] fasta file of reference genome [hg38.fa]
-      --ref_dict           [file] dict file for the reference genomep [hg38.dict]
+      --ref                [file] fasta file of reference genome [hg38.fa], should be indexed [hg38.fa.fai]
     Optional arguments:
       --tumor_only         [flag] active tumor_only mode
       --bam                 [flag] active bam mode [def:cram]
@@ -39,11 +38,9 @@ log.info IARC_Header()
 log.info tool_header()
 //Check mandatory parameters
 assert (params.ref != null) : "please specify --ref reference.fasta"
-assert (params.ref_dict != null) : "please specify --ref_dict reference.dict"
 assert (params.tn_file != null ) : "please specify --tn_file"
 assert (params.cohort_dir != null ) : "please specify --cohort_dir"
 
-//if(params.tn_file != null && params.cohort_dir == null){ println "--cohort_dir shold be specified when using the --tn_file variable"; exit 1;}
 //function that read the tumors to process from a tn_file
 if(params.tn_file){
   def cram = params.bam ? false:true
@@ -51,10 +48,8 @@ if(params.tn_file){
  //we duplicate the tn_pairs channel
  tn_pairs.into { tn_pairs_cobalt; tn_pairs_amber}
 }
-//chanel for VCF file
-//ch_vcf = Channel.value(file(params.dbsnp_vcf_ref)).ifEmpty{exit 1, "VCF file not found: ${params.dbsnp_vcf_ref}"}
+//chanel for reference genome
 ref_fasta = Channel.value(file(params.ref)).ifEmpty{exit 1, "reference file not found: ${params.ref}"}
-ref_dict = Channel.value(file(params.ref_dict)).ifEmpty{exit 1, "Dict reference file not found: ${params.ref_dict}"}
 ref_fai = Channel.value(file(params.ref+'.fai')).ifEmpty{exit 1, "index file not found: ${params.ref}.fai"}
 
 
@@ -77,7 +72,6 @@ process COBALT {
   input:
   set val(tumor_id), file(tumor), file(tumor_index), file(normal), file(normal_index) from tn_pairs_cobalt
   file(ref) from ref_fasta
-  file(dict) from ref_dict
   file(fai) from ref_fai
 
   output:
@@ -85,13 +79,13 @@ process COBALT {
   script:
      if(params.tumor_only){
        """
-      COBALT  -Xms1g -Xmx${params.mem}g -gc_profile /hmftools/hg38/GC_profile.1000bp.38.cnp \\
+     COBALT  -Xms1g -Xmx${params.mem}g -gc_profile /hmftools/hg38/GC_profile.1000bp.38.cnp \\
               -ref_genome ${ref} -tumor_only -tumor_only_diploid_bed /hmftools/hg38/DiploidRegions.38.bed \\
      	        -tumor  ${tumor_id}_T -tumor_bam ${tumor} -output_dir ${tumor_id}_COBALT -threads ${params.cpu}
        """
      }else{
        """
-      COBALT  -Xms1g -Xmx${params.mem}g -gc_profile /hmftools/hg38/GC_profile.1000bp.38.cnp \\
+     COBALT  -Xms1g -Xmx${params.mem}g -gc_profile /hmftools/hg38/GC_profile.1000bp.38.cnp \\
               -ref_genome ${ref} -reference ${tumor_id}_N -reference_bam ${normal} \\
      	        -tumor  ${tumor_id}_T -tumor_bam ${tumor} -output_dir ${tumor_id}_COBALT -threads ${params.cpu}
       """
@@ -110,7 +104,6 @@ process AMBER {
   input:
   set val(tumor_id), file(tumor), file(tumor_index), file(normal), file(normal_index) from tn_pairs_amber
   file(ref) from ref_fasta
-  file(dict) from ref_dict
   file(fai) from ref_fai
   output:
   set val(tumor_id), path("${tumor_id}_AMBER") into amber
@@ -143,7 +136,6 @@ process PURPLE {
   //set val(tumor_id), file(tumor), file(tumor_index), file(normal), file(normal_index) from tn_pairs_amber
   set val(tumor_id), path(amber_dir), path(cobalt_dir) from amber_cobalt
   file(ref) from ref_fasta
-  file(dict) from ref_dict
   file(fai) from ref_fai
   output:
   set val(tumor_id), path("${tumor_id}_PURPLE") into purple
@@ -177,7 +169,7 @@ process PURPLE {
                -threads ${params.cpu} \\
                -ref_genome ${ref}
 
-               awk -v tumor=${tumor_id} '{print tumor"\t"\$0}' ${tumor_id}_PURPLE/${tumor_id}_T.purple.purity.tsv > ${tumor_id}_T.purple.purity.sample.tsv
+         awk -v tumor=${tumor_id} '{print tumor"\t"\$0}' ${tumor_id}_PURPLE/${tumor_id}_T.purple.purity.tsv > ${tumor_id}_T.purple.purity.sample.tsv
        """
      }
 
@@ -253,7 +245,7 @@ def print_params () {
 //useful url: http://www.lihaoyi.com/post/BuildyourownCommandLinewithANSIescapecodes.html
 def tool_header (){
         return """
-        F\u001b[31;1mA\u001b[32;1mC\u001b[33;1mE\u001b[0mT\u001b[33;1ms\u001b[31;1m : Somatic\u001b[32;1m Copy\u001b[33;1m Number\u001b[31;1m Variant\u001b[33;1m caller\u001b[32;1m (${workflow.manifest.version})
+        PURPLE: Somatic CNV caller (${workflow.manifest.version})
         """
 }
 
