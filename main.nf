@@ -17,6 +17,7 @@ def show_help (){
       --tn_file		         [file] File containing list of T/N bam/cram files to be processed
       --cohort_dir         [dir]  directory where the BAM or CRAM  file are stored
       --ref                [file] fasta file of reference genome [hg38.fa], should be indexed [hg38.fa.fai]
+      --ref_dict           [file] dict file for the reference genomep [hg38.dict]
     Optional arguments:
       --tumor_only         [flag] active tumor_only mode
       --bam                 [flag] active bam mode [def:cram]
@@ -38,6 +39,7 @@ log.info IARC_Header()
 log.info tool_header()
 //Check mandatory parameters
 assert (params.ref != null) : "please specify --ref reference.fasta"
+assert (params.ref_dict != null) : "please specify --ref_dict reference.dict"
 assert (params.tn_file != null ) : "please specify --tn_file"
 assert (params.cohort_dir != null ) : "please specify --cohort_dir"
 
@@ -50,6 +52,7 @@ if(params.tn_file){
 }
 //chanel for reference genome
 ref_fasta = Channel.value(file(params.ref)).ifEmpty{exit 1, "reference file not found: ${params.ref}"}
+ref_dict = Channel.value(file(params.ref_dict)).ifEmpty{exit 1, "Dict reference file not found: ${params.ref_dict}"}
 ref_fai = Channel.value(file(params.ref+'.fai')).ifEmpty{exit 1, "index file not found: ${params.ref}.fai"}
 
 
@@ -137,6 +140,7 @@ process PURPLE {
   set val(tumor_id), path(amber_dir), path(cobalt_dir) from amber_cobalt
   file(ref) from ref_fasta
   file(fai) from ref_fai
+  file(dict) from ref_dict
   output:
   set val(tumor_id), path("${tumor_id}_PURPLE") into purple
   //MESO_071_T_T.purple.purity.tsv
