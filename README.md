@@ -98,7 +98,7 @@ results
 │   ├── .....
 ├── PURPLE									# PURPLE result directory	
 │   ├── S00016_T_PURPLE
-│   │   ├── circos							# circos direcoty with files for plotting
+│   │   ├── circos							# CIRCOS directory with files for plotting
 │   │   ├── purple.version
 │   │   ├── S00016_T_T.purple.cnv.gene.tsv
 │   │   ├── S00016_T_T.purple.cnv.germline.tsv
