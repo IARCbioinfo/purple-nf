@@ -72,7 +72,7 @@ sample3_T1	sample3	sample3_T.cram	sample3_N.cram
 
 ```
 results
-├── AMBER                                                 # AMBER result directory
+├── AMBER                               # AMBER result directory
 │   ├── S00016_T_AMBER
 │   │   ├── amber.version
 │   │   ├── S00016_T_N.amber.snp.vcf.gz
@@ -85,7 +85,7 @@ results
 │   │   ├── S00016_T_T.amber.contamination.vcf.gz
 │   │   ├── S00016_T_T.amber.contamination.vcf.gz.tbi
 │   │   └── S00016_T_T.amber.qc
-├── COBALT												# COBALT result directory	
+├── COBALT									# COBALT result directory	
 │   ├── S00016_T_COBALT
 │   │   ├── cobalt.version
 │   │   ├── S00016_T_N.cobalt.gc.median.tsv
@@ -96,9 +96,9 @@ results
 │   │   ├── S00016_T_T.cobalt.ratio.pcf
 │   │   └── S00016_T_T.cobalt.ratio.tsv
 │   ├── .....
-├── PURPLE											# PURPLE result directory	
+├── PURPLE									# PURPLE result directory	
 │   ├── S00016_T_PURPLE
-│   │   ├── circos								 # circos direcoty with files for plotting
+│   │   ├── circos							# circos direcoty with files for plotting
 │   │   ├── purple.version
 │   │   ├── S00016_T_T.purple.cnv.gene.tsv
 │   │   ├── S00016_T_T.purple.cnv.germline.tsv
@@ -110,12 +110,12 @@ results
 │   │   └── S00016_T_T.purple.somatic.clonality.tsv
 │   ├── .....    
 └── purple_summary.txt     # Summary file for all tumors
-├── nf-pipeline_info		# Nextflow info directory
+├── nf-pipeline_info		# Nextflow information directory
 │   ├── purple_dag.html
 │   ├── purple_report.html
 │   ├── purple_timeline.html
 │   ├── purple_trace.txt
-│   └── run_parameters_report.txt # Custom file providing info for software version and calling parameters
+│   └── run_parameters_report.txt # Custom file providing info for software versions and calling parameters
 ```
 
 
