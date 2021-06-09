@@ -7,3 +7,7 @@ dependencies:
   - hmftools-cobalt=1.11
   - hmftools-purple=2.52
   - hmftools-amber=3.5
+  - r-tidyverse=1.2.1
+  - bioconductor-copynumber=1.20.0
+  - r-data.table=1.11.6
+#  - bioconductor-genomicranges=1.44.0
