@@ -142,7 +142,7 @@ if(params.multisample_seg){
      set val(sampleID), val(regionID), file(baf_folders), file(ratio_folders) from amber_cobalt4multiseg
 
      output:
-     set val(sampleID), val(regionID), file("${sampleID}${region_ID}_AMBER_multisampleseg"), file("${sampleID}${regionID}_COBALT_multisampleseg") into amber_cobalt4purple0
+     set val(sampleID), val(regionID), file("${sampleID}${regionID}_AMBER_multisampleseg"), file("${sampleID}${regionID}_COBALT_multisampleseg") into amber_cobalt4purple0
      file('*.pdf') optional true into bbs_plots
 
      shell :
@@ -163,15 +163,16 @@ process PURPLE {
   publishDir params.output_folder+'/PURPLE/', mode: 'copy'
 
   input:
-  set val(tumor_id), val(region_id), path(amber_dir), path(cobalt_dir) from amber_cobalt4purple
+  set val(tumor_id), val(region), path(amber_dir), path(cobalt_dir) from amber_cobalt4purple
   file(ref) from ref_fasta
   file(fai) from ref_fai
   file(dict) from ref_dict
   output:
-  set val(tumor_id), val(region_id), path("${tumor_id}${region_id}_PURPLE") into purple
+  set val(tumor_id), val(region), path("${tumor_id}${region_id}_PURPLE") into purple
   file("${tumor_id}${region_id}.purple.purity.sample.tsv") into stats_purple
 
   script:
+     region_id=amber_dir.replace("_AMBER", "")
      if(params.tumor_only){
        """
        PURPLE  -Xms1g -Xmx${params.mem}g -tumor_only  -tumor ${tumor_id}${region_id} \\
