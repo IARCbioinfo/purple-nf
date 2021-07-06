@@ -142,7 +142,7 @@ if(params.multisample_seg){
 
      output:
      set val(sampleID), file("${sampleID}_AMBER_multisampleseg"), file("${sampleID}_COBALT_multisampleseg") into amber_cobalt4purple
-     file('*.pdf') into bbs_plots
+     file('*.pdf') optional true into bbs_plots
 
      shell :
      '''
