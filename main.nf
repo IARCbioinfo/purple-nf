@@ -142,20 +142,21 @@ if(params.multisample_seg){
      set val(sampleID), val(regionID), file(baf_folders), file(ratio_folders) from amber_cobalt4multiseg
 
      output:
-     set val(sampleID), val(regionID), file("${sampleID}*_AMBER_multisampleseg"), file("${sampleID}*_COBALT_multisampleseg") into amber_cobalt4purple
+     set val(sampleID), val(regionID), file("${sampleID}*_AMBER_multisampleseg"), file("${sampleID}*_COBALT_multisampleseg") into amber_cobalt4purple0
      file('*.pdf') optional true into bbs_plots
 
      shell :
      '''
      Rscript !{projectDir}/bin/multisample_segmentation.r !{sampleID} "." "" 100 !{projectDir}/db/hg38/chrarms.tsv
      '''
-}
+  }
+  amber_cobalt4purple = amber_cobalt4purple0.transpose(by:0)
+					    .view()
 }else{
   amber_cobalt4purple = amber_cobalt
 }
 
 process PURPLE {
-
  cpus params.cpu
  memory params.mem+'G'	
 
