@@ -172,7 +172,7 @@ process PURPLE {
   file("${name}.purple.purity.sample.tsv") into stats_purple
 
   script:
-     name=amber_dir.baseName.replace("_AMBER", "")
+     name=amber_dir.baseName.replace("_AMBER_multisampleseg", "")
      if(params.tumor_only){
        """
        PURPLE  -Xms1g -Xmx${params.mem}g -tumor_only  -tumor ${name} \\
