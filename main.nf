@@ -142,7 +142,7 @@ if(params.multisample_seg){
      set val(sampleID), val(regionID), file(baf_folders), file(ratio_folders) from amber_cobalt4multiseg
 
      output:
-     set val(sampleID), val(regionID), file("${sampleID}${regionID}_AMBER_multisampleseg"), file("${sampleID}${regionID}_COBALT_multisampleseg") into amber_cobalt4purple0
+     set val(sampleID), val(regionID), file("${sampleID}*_AMBER_multisampleseg"), file("${sampleID}*_COBALT_multisampleseg") into amber_cobalt4purple0
      file('*.pdf') optional true into bbs_plots
 
      shell :
@@ -172,7 +172,7 @@ process PURPLE {
   file("${tumor_id}${region_id}.purple.purity.sample.tsv") into stats_purple
 
   script:
-     region_id=amber_dir.replace("_AMBER", "")
+     region_id=amber_dir.baseName.replace("_AMBER", "")
      if(params.tumor_only){
        """
        PURPLE  -Xms1g -Xmx${params.mem}g -tumor_only  -tumor ${tumor_id}${region_id} \\
