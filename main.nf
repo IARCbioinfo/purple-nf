@@ -127,7 +127,8 @@ process AMBER {
 amber_cobalt=amber.join(cobalt, remainder: true)
 
 if(params.multisample_seg){
-  amber_cobalt4multiseg = amber_cobalt.groupTuple(by: [0,1])
+  amber_cobalt4multiseg = amber_cobalt.groupTuple(by: 0)
+				      .map{row->[row[0],row[1],row[2],row[4]]}
                                       .view()
 
   process multisample_segmentation {
