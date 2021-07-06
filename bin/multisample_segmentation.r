@@ -123,6 +123,7 @@ COBALT.multipcfoutput = multipcf(COBALT.pcfinput,gamma=as.numeric(args[4]),arms 
 for(i in 1:length(AMBERs)){
   dir.create(paste0(AMBERs.names[i],"_AMBER_multisampleseg") )
   dir.create(paste0(COBALTs.names[i],"_COBALT_multisampleseg") )
+  system(paste0("cp ",AMBERs.names[i], "/* " ,AMBERs.names[i],"_AMBER_multisampleseg/") )
   # format AMBER output
   out_AMBER_tmp = AMBER.multipcfoutput %>% mutate(sampleID=AMBERs.names[i]) %>% 
     dplyr::select(sampleID,chrom:n.probes,colnames(AMBER.multipcfoutput)[str_detect(colnames(AMBER.multipcfoutput),AMBERs.names[i])])
