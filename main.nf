@@ -78,7 +78,7 @@ process COBALT {
   file(fai) from ref_fai
 
   output:
-  set val(tumor_id), path("${tumor_id}${region_id}_COBALT") into cobalt
+  set val(tumor_id), val(region_id), path("${tumor_id}${region_id}_COBALT") into cobalt
   script:
      if(params.tumor_only){
        """
@@ -107,7 +107,7 @@ process AMBER {
   file(ref) from ref_fasta
   file(fai) from ref_fai
   output:
-  set val(tumor_id), path("${tumor_id}${region_id}_AMBER") into amber
+  set val(tumor_id), val(region_id), path("${tumor_id}${region_id}_AMBER") into amber
   script:
      if(params.tumor_only){
        """
@@ -138,10 +138,10 @@ if(params.multisample_seg){
      publishDir params.output_folder+"/multiseg/", mode: 'copy'
 
      input:
-     set val(sampleID), file(baf_folders), file(ratio_folders) from amber_cobalt4multiseg
+     set val(sampleID), val(regionID), file(baf_folders), file(ratio_folders) from amber_cobalt4multiseg
 
      output:
-     set val(sampleID), file("${sampleID}_AMBER_multisampleseg"), file("${sampleID}_COBALT_multisampleseg") into amber_cobalt4purple
+     set val(sampleID), val(regionID), file("${sampleID}*_AMBER_multisampleseg"), file("${sampleID}*_COBALT_multisampleseg") into amber_cobalt4purple
      file('*.pdf') optional true into bbs_plots
 
      shell :
@@ -161,7 +161,6 @@ process PURPLE {
   publishDir params.output_folder+'/PURPLE/', mode: 'copy'
 
   input:
-  //set val(tumor_id), file(tumor), file(tumor_index), file(normal), file(normal_index) from tn_pairs_amber
   set val(tumor_id), val(region_id), path(amber_dir), path(cobalt_dir) from amber_cobalt4purple
   file(ref) from ref_fasta
   file(fai) from ref_fai
