@@ -142,7 +142,7 @@ if(params.multisample_seg){
      set val(sampleID), val(regionID), file(baf_folders), file(ratio_folders) from amber_cobalt4multiseg
 
      output:
-     set val(sampleID), val(regionID), file("${sampleID}*_AMBER_multisampleseg"), file("${sampleID}*_COBALT_multisampleseg") into amber_cobalt4purple0
+     set val(sampleID), val(regionID), file("${sampleID}${region_ID}_AMBER_multisampleseg"), file("${sampleID}${regionID}_COBALT_multisampleseg") into amber_cobalt4purple0
      file('*.pdf') optional true into bbs_plots
 
      shell :
@@ -150,8 +150,7 @@ if(params.multisample_seg){
      Rscript !{projectDir}/bin/multisample_segmentation.r !{sampleID} "." "" 100 !{projectDir}/db/hg38/chrarms.tsv
      '''
   }
-  amber_cobalt4purple = amber_cobalt4purple0.map{row -> [row[0]+row[1],"",row[2],row[3]]}
-					    .transpose(by:[2,3])
+  amber_cobalt4purple = amber_cobalt4purple0.transpose(by:[1,2,3])
 					    .view()
 }else{
   amber_cobalt4purple = amber_cobalt
@@ -170,7 +169,6 @@ process PURPLE {
   file(dict) from ref_dict
   output:
   set val(tumor_id), val(region_id), path("${tumor_id}${region_id}_PURPLE") into purple
-  //set val(tumor_id), file("${tumor_id}_PURPLE/${tumor_id}_T.purple.purity.tsv") into stats_purple
   file("${tumor_id}${region_id}.purple.purity.sample.tsv") into stats_purple
 
   script:
