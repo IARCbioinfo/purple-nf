@@ -168,37 +168,37 @@ process PURPLE {
   file(fai) from ref_fai
   file(dict) from ref_dict
   output:
-  set val(tumor_id), val(region), path("${tumor_id}${region_id}_PURPLE") into purple
-  file("${tumor_id}${region_id}.purple.purity.sample.tsv") into stats_purple
+  set val(tumor_id), val(region), path("${name}_PURPLE") into purple
+  file("${name}.purple.purity.sample.tsv") into stats_purple
 
   script:
-     region_id=amber_dir.baseName.replace("_AMBER", "")
+     name=amber_dir.baseName.replace("_AMBER", "")
      if(params.tumor_only){
        """
-       PURPLE  -Xms1g -Xmx${params.mem}g -tumor_only  -tumor ${tumor_id}${region_id} \\
+       PURPLE  -Xms1g -Xmx${params.mem}g -tumor_only  -tumor ${name} \\
                -no_charts \\
-               -output_dir ${tumor_id}${region_id}_PURPLE \\
+               -output_dir ${name}_PURPLE \\
                -amber ${amber_dir} \\
                -cobalt ${cobalt_dir} \\
                -gc_profile /hmftools/hg38/GC_profile.1000bp.38.cnp \\
                -threads ${params.cpu} \\
                -ref_genome ${ref}
 
-        awk -v tumor=${tumor_id}${region_id} '{print tumor"\t"\$0}' ${tumor_id}${region_id}_PURPLE/${tumor_id}${region_id}.purple.purity.tsv > ${tumor_id}${region_id}.purple.purity.sample.tsv
+        awk -v tumor=${name} '{print tumor"\t"\$0}' ${name}_PURPLE/${name}.purple.purity.tsv > ${name}.purple.purity.sample.tsv
 
        """
      }else{
        """
-        PURPLE  -Xms1g -Xmx${params.mem}g -reference ${tumor_id}_N  -tumor ${tumor_id}${region_id} \\
+        PURPLE  -Xms1g -Xmx${params.mem}g -reference ${tumor_id}_N  -tumor ${name} \\
                -no_charts \\
-               -output_dir ${tumor_id}${region_id}_PURPLE \\
+               -output_dir ${name}_PURPLE \\
                -amber ${amber_dir} \\
                -cobalt ${cobalt_dir} \\
                -gc_profile /hmftools/hg38/GC_profile.1000bp.38.cnp \\
                -threads ${params.cpu} \\
                -ref_genome ${ref}
 
-         awk -v tumor=${tumor_id}${region_id} '{print tumor"\t"\$0}' ${tumor_id}${region_id}_PURPLE/${tumor_id}${region_id}.purple.purity.tsv > ${tumor_id}${region_id}.purple.purity.sample.tsv
+         awk -v tumor=${name} '{print tumor"\t"\$0}' ${name}_PURPLE/${name}.purple.purity.tsv > ${name}.purple.purity.sample.tsv
        """
      }
 
