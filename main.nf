@@ -150,7 +150,8 @@ if(params.multisample_seg){
      Rscript !{projectDir}/bin/multisample_segmentation.r !{sampleID} "." "" 100 !{projectDir}/db/hg38/chrarms.tsv
      '''
   }
-  amber_cobalt4purple = amber_cobalt4purple0.transpose(by:[1,2,3])
+  amber_cobalt4purple = amber_cobalt4purple0.map{row -> [row[0]+row[1],"",row[2],row[3]]}
+					    .transpose(by:[2,3])
 					    .view()
 }else{
   amber_cobalt4purple = amber_cobalt
