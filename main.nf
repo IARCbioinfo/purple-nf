@@ -48,8 +48,10 @@ assert (params.cohort_dir != null ) : "please specify --cohort_dir"
 if(params.tn_file){
   def cram = params.bam ? false:true
  tn_pairs = parse_tn_file(params.tn_file,params.cohort_dir,cram)
+ tn_pairs2 = parse_tn_file(params.tn_file,params.cohort_dir,cram)
  //we duplicate the tn_pairs channel
- tn_pairs.into { tn_pairs_cobalt; tn_pairs_amber}
+ //tn_pairs.into { tn_pairs_cobalt; tn_pairs_amber}
+ preproc_vcf = tn_pairs2.reduce(true){a,b -> b[6]!=null && a }.view()
 }
 //chanel for reference genome
 ref_fasta = Channel.value(file(params.ref)).ifEmpty{exit 1, "reference file not found: ${params.ref}"}
@@ -65,20 +67,44 @@ print_params()
 // /hmftools/hg38/GC_profile.1000bp.38.cnp
 // /hmftools/hg38/GermlineHetPon.38.vcf
 
-process COBALT {
+if(preproc_vcf){
+process preproc_vcf {
 
  cpus params.cpu
  memory params.mem+'G'	
+ tag { tumor_id }
 
-
-  publishDir params.output_folder+'/COBALT/', mode: 'copy'
+  publishDir params.output_folder+'/VCF_highconf/', mode: 'copy'
   input:
-  set val(tumor_id), val(region_id), file(tumor), file(tumor_index), file(normal), file(normal_index) from tn_pairs_cobalt
+  set val(tumor_id), val(region_id), file(tumor), file(tumor_index), file(normal), file(normal_index), file(vcf) from tn_pairs
   file(ref) from ref_fasta
   file(fai) from ref_fai
 
   output:
-  set val(tumor_id), val(region_id), path("${tumor_id}${region_id}_COBALT") into cobalt
+  set val(tumor_id), val(region_id), file(tumor), file(tumor_index), file(normal), file(normal_index), file("*_highconf.vcf.gz") into tn_pairs_cobalt,tn_pairs_amber
+  script:
+  """
+  bcftools view -Oz -e 'FORMAT/AD[0:1]<5' -V indels ${vcf} -o ${tumor_id}${region_id}_highconf.vcf.gz
+  """
+}
+}else{
+  tn_pairs.into{tn_pairs_cobalt;tn_pairs_amber}
+}
+
+
+process COBALT {
+ cpus params.cpu
+ memory params.mem+'G'	
+ tag { tumor_id }
+
+  publishDir params.output_folder+'/COBALT/', mode: 'copy'
+  input:
+  set val(tumor_id), val(region_id), file(tumor), file(tumor_index), file(normal), file(normal_index), file(vcf) from tn_pairs_cobalt
+  file(ref) from ref_fasta
+  file(fai) from ref_fai
+
+  output:
+  set val(tumor_id), val(region_id), path("${tumor_id}${region_id}_COBALT"), file(vcf) into cobalt
   script:
      if(params.tumor_only){
        """
@@ -100,10 +126,11 @@ process AMBER {
 
  cpus params.cpu
  memory params.mem+'G'	
+ tag { tumor_id }
 
   publishDir params.output_folder+'/AMBER/', mode: 'copy'
   input:
-  set val(tumor_id), val(region_id), file(tumor), file(tumor_index), file(normal), file(normal_index) from tn_pairs_amber
+  set val(tumor_id), val(region_id), file(tumor), file(tumor_index), file(normal), file(normal_index), file(vcf) from tn_pairs_amber
   file(ref) from ref_fasta
   file(fai) from ref_fai
   output:
@@ -139,10 +166,10 @@ if(params.multisample_seg){
      publishDir params.output_folder+"/multiseg/", mode: 'copy'
 
      input:
-     set val(sampleID), val(regionID), file(baf_folders), file(ratio_folders) from amber_cobalt4multiseg
+     set val(sampleID), val(regionID), file(baf_folders), file(ratio_folders), file(vcf) from amber_cobalt4multiseg
 
      output:
-     set val(sampleID), val(regionID), file("${sampleID}*_AMBER_multisampleseg"), file("${sampleID}*_COBALT_multisampleseg") into amber_cobalt4purple0
+     set val(sampleID), val(regionID), file("${sampleID}*_AMBER_multisampleseg"), file("${sampleID}*_COBALT_multisampleseg"), file(vcf) into amber_cobalt4purple0
      file('*.pdf') optional true into bbs_plots
 
      shell :
@@ -159,11 +186,12 @@ if(params.multisample_seg){
 process PURPLE {
  cpus params.cpu
  memory params.mem+'G'	
+ tag { tumor_id }
 
   publishDir params.output_folder+'/PURPLE/', mode: 'copy'
 
   input:
-  set val(tumor_id), val(region), path(amber_dir), path(cobalt_dir) from amber_cobalt4purple
+  set val(tumor_id), val(region), path(amber_dir), path(cobalt_dir), path(vcf) from amber_cobalt4purple
   file(ref) from ref_fasta
   file(fai) from ref_fai
   file(dict) from ref_dict
@@ -180,6 +208,7 @@ process PURPLE {
                -output_dir ${name}_PURPLE \\
                -amber ${amber_dir} \\
                -cobalt ${cobalt_dir} \\
+               -somatic_vcf ${vcf} \\
                -gc_profile /hmftools/hg38/GC_profile.1000bp.38.cnp \\
                -threads ${params.cpu} \\
                -ref_genome ${ref}
@@ -224,7 +253,8 @@ def parse_tn_file (tn_file,path,cram){
                file(path + "/" + row.tumor),
                file(path + "/" + row.tumor+file_ext),
                file(path + "/" + row.normal),
-               file(path + "/" + row.normal+file_ext)]}
+               file(path + "/" + row.normal+file_ext),
+               file(path + "/" + row.vcf)]}
       .ifEmpty{exit 1, "${tn_file} was empty - no tumor/normal supplied" }
 	//we return the channel
   return tn_pairs

@@ -10,4 +10,5 @@ dependencies:
   - r-tidyverse=1.2.1
   - bioconductor-copynumber=1.20.0
   - r-data.table=1.11.6
+  - bcftools=1.13
 #  - bioconductor-genomicranges=1.44.0
