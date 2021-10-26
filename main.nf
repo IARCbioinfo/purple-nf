@@ -20,11 +20,11 @@ def show_help (){
       --ref_dict           [file] dict file for the reference genomep [hg38.dict]
     Optional arguments:
       --tumor_only         [flag] active tumor_only mode
-      --bam                 [flag] active bam mode [def:cram]
-      --output_folder       [string] name of output folder
+      --bam                [flag] active bam mode [def:cram]
+      --output_folder      [string] name of output folder
       --cpu                [Integer]  Number of CPUs[def:2]
-      --mem 		   [Integer] Max memory [def:8Gb]	
-
+      --mem 		           [Integer] Max memory [def:8Gb]
+      --somatic_vcfs       [file] file containing list of somatic VCF variants with tumor_id and vcf_path
       """.stripIndent()
 }
 
@@ -50,6 +50,15 @@ if(params.tn_file){
  //we duplicate the tn_pairs channel
  tn_pairs.into { tn_pairs_cobalt; tn_pairs_amber}
 }
+//function to read the somatic vcfs
+
+if(params.somatic_vcfs){
+  svcfs=parse_vcf_file(params.somatic_vcfs)
+}else{
+  svcfs=channel.empty()
+}
+
+
 //chanel for reference genome
 ref_fasta = Channel.value(file(params.ref)).ifEmpty{exit 1, "reference file not found: ${params.ref}"}
 ref_dict = Channel.value(file(params.ref_dict)).ifEmpty{exit 1, "Dict reference file not found: ${params.ref_dict}"}
@@ -64,11 +73,37 @@ print_params()
 // /hmftools/hg38/DiploidRegions.38.bed
 // /hmftools/hg38/GC_profile.1000bp.38.cnp
 // /hmftools/hg38/GermlineHetPon.38.vcf
+//run preprocesing with bcftools
+process HQ_VCF{
+  cpus '1'
+  memory '1G'
+  tag "hq_vcf"
+
+  publishDir params.output_folder+'/VCF_highconf/', mode: 'copy'
+  input:
+  set val(tumor_id), file(vcf) from svcfs
+  output:
+  set val(tumor_id), file("${vcf.baseName}_highconf.vcf.gz") into hc_vcfs
+  when:
+  params.somatic_vcfs != 'null'
+
+  script:
+  if(params.debug == false){
+  """
+  bcftools view -Oz -e 'FORMAT/AD[0:1]<5' -V indels ${vcf} -o ${vcf.baseName}_highconf.vcf.gz
+  """
+  }else{
+  """
+    touch ${vcf.baseName}_highconf.vcf.gz
+  """
+  }
+}
+
 
 process COBALT {
 
  cpus params.cpu
- memory params.mem+'G'	
+ memory params.mem+'G'
 
 
   publishDir params.output_folder+'/COBALT/', mode: 'copy'
@@ -80,6 +115,7 @@ process COBALT {
   output:
   set val(tumor_id), path("${tumor_id}_COBALT") into cobalt
   script:
+  if(params.debug == false){
      if(params.tumor_only){
        """
      COBALT  -Xms1g -Xmx${params.mem}g -gc_profile /hmftools/hg38/GC_profile.1000bp.38.cnp \\
@@ -93,15 +129,19 @@ process COBALT {
      	        -tumor  ${tumor_id}_T -tumor_bam ${tumor} -output_dir ${tumor_id}_COBALT -threads ${params.cpu}
       """
      }
-
+  }else{
+    //debug code with options
+    """
+    mkdir ${tumor_id}_COBALT
+    touch ${tumor_id}_COBALT/${tumor_id}.cobalt
+    """
+  }
 }
 
 process AMBER {
 
  cpus params.cpu
- memory params.mem+'G'	
-
-
+ memory params.mem+'G'
 
   publishDir params.output_folder+'/AMBER/', mode: 'copy'
   input:
@@ -111,6 +151,7 @@ process AMBER {
   output:
   set val(tumor_id), path("${tumor_id}_AMBER") into amber
   script:
+  if(params.debug == false){
      if(params.tumor_only){
        """
       AMBER  -Xms1g -Xmx${params.mem}g  -loci /hmftools/hg38/GermlineHetPon.38.vcf -ref_genome ${ref} -tumor_only \\
@@ -123,31 +164,49 @@ process AMBER {
                -tumor  ${tumor_id}_T -tumor_bam ${tumor} -output_dir ${tumor_id}_AMBER -threads ${params.cpu}
         """
      }
-
+  }else{
+    """
+    mkdir ${tumor_id}_AMBER
+    touch ${tumor_id}_AMBER/${tumor_id}.amber
+    """
+  }
 }
+
 //we merge previous results from amber and cobalt
 amber_cobalt=amber.join(cobalt, remainder: true)
+//we ask if somatics where given and join them to the amber_cobalt struct
+if(params.somatic_vcfs){
+  amber_cobalt_vcf=amber_cobalt.join(hc_vcfs,remainder:true)
+}else{
+  //when no vcfs files are given
+  vcf_dump = file('NO_VCF')
+  amber_cobalt_vcf=amber_cobalt.spread([vcf_dump])
+}
 
+//dumping some channels
+//amber_cobalt_vcf.into{print_vcfs;amber_cobalt_vcf2}
+//print_vcfs.view()
+
+//we have to merge the different inputs
 process PURPLE {
 
  cpus params.cpu
- memory params.mem+'G'	
+ memory params.mem+'G'
 
   publishDir params.output_folder+'/PURPLE/', mode: 'copy'
 
   input:
-  //set val(tumor_id), file(tumor), file(tumor_index), file(normal), file(normal_index) from tn_pairs_amber
-  set val(tumor_id), path(amber_dir), path(cobalt_dir) from amber_cobalt
+  set val(tumor_id), path(amber_dir), path(cobalt_dir), file(hcvcf) from amber_cobalt_vcf
   file(ref) from ref_fasta
   file(fai) from ref_fai
   file(dict) from ref_dict
   output:
   set val(tumor_id), path("${tumor_id}_PURPLE") into purple
-  //MESO_071_T_T.purple.purity.tsv
-  //set val(tumor_id), file("${tumor_id}_PURPLE/${tumor_id}_T.purple.purity.tsv") into stats_purple
   file("${tumor_id}_T.purple.purity.sample.tsv") into stats_purple
 
   script:
+  def include_vcf_purple = hcvcf.name != 'NO_VCF' ? "-somatic_vcf ${hcvcf}" : ''
+  if(params.debug == false){
      if(params.tumor_only){
        """
        PURPLE  -Xms1g -Xmx${params.mem}g -tumor_only  -tumor ${tumor_id}_T \\
@@ -157,7 +216,7 @@ process PURPLE {
                -cobalt ${cobalt_dir} \\
                -gc_profile /hmftools/hg38/GC_profile.1000bp.38.cnp \\
                -threads ${params.cpu} \\
-               -ref_genome ${ref}
+               -ref_genome ${ref} ${include_vcf_purple}
 
         awk -v tumor=${tumor_id} '{print tumor"\t"\$0}' ${tumor_id}_PURPLE/${tumor_id}_T.purple.purity.tsv > ${tumor_id}_T.purple.purity.sample.tsv
 
@@ -171,12 +230,25 @@ process PURPLE {
                -cobalt ${cobalt_dir} \\
                -gc_profile /hmftools/hg38/GC_profile.1000bp.38.cnp \\
                -threads ${params.cpu} \\
-               -ref_genome ${ref}
+               -ref_genome ${ref} ${include_vcf_purple}
 
          awk -v tumor=${tumor_id} '{print tumor"\t"\$0}' ${tumor_id}_PURPLE/${tumor_id}_T.purple.purity.tsv > ${tumor_id}_T.purple.purity.sample.tsv
        """
      }
-
+   }else{
+     """
+     echo PURPLE  -Xms1g -Xmx${params.mem}g -reference ${tumor_id}_N  -tumor ${tumor_id}_T \\
+            -no_charts \\
+            -output_dir ${tumor_id}_PURPLE \\
+            -amber ${amber_dir} \\
+            -cobalt ${cobalt_dir} \\
+            -gc_profile /hmftools/hg38/GC_profile.1000bp.38.cnp \\
+            -threads ${params.cpu} \\
+            -ref_genome ${ref} ${include_vcf_purple}
+      mkdir ${tumor_id}_PURPLE
+      touch ${tumor_id}_T.purple.purity.sample.tsv
+     """
+   }
 }
 
 stats_purple.collectFile(name: 'purple_summary.txt', storeDir: params.output_folder, seed: 'tumor_id\tpurity\tnormFactor\tscore\tdiploidProportion\tploidy\tgender\tstatus\tpolyclonalProportion\tminPurity\tmaxPurity\tminPloidy\tmaxPloidy\tminDiploidProportion\tmaxDiploidProportion\tversion\tsomaticPenalty\twholeGenomeDuplication\tmsIndelsPerMb\tmsStatus\ttml\ttmlStatus\ttmbPerMb\ttmbStatus\tsvTumorMutationalBurden\n', newLine: false, skip: 1)
@@ -203,6 +275,18 @@ def parse_tn_file (tn_file,path,cram){
       .ifEmpty{exit 1, "${tn_file} was empty - no tumor/normal supplied" }
 	//we return the channel
   return tn_pairs
+}
+
+//we parse the somatics vcf files
+def parse_vcf_file (vcf_file){
+	    //[sample_id vcf_path]
+    def svcfs=Channel.fromPath(vcf_file)
+      .splitCsv(header: true, sep: '\t', strip: true)
+      .map{row -> [ row.tumor_id,
+               file(row.vcf_path)]}
+      .ifEmpty{exit 1, "${svcfs} was empty - no vcf files supplied" }
+	//we return the channel
+  return svcfs
 }
 
 // print the calling parameter to the log and a log file
