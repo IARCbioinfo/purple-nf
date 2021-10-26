@@ -24,7 +24,7 @@ def show_help (){
       --output_folder      [string] name of output folder
       --cpu                [Integer]  Number of CPUs[def:2]
       --mem 		           [Integer] Max memory [def:8Gb]
-      --somatic_vcfs       [file] file containing list of somatic VCF variants with tumor_id and vcf_path
+      --somatic_vcfs       [file] file containing list of somatic VCF variants with tumor_id and vcf_path, by default assumes that tumor_sample is the second listed sample of the VCF file.
       """.stripIndent()
 }
 
@@ -90,7 +90,7 @@ process HQ_VCF{
   script:
   if(params.debug == false){
   """
-  bcftools view -Oz -e 'FORMAT/AD[0:1]<5' -V indels ${vcf} -o ${vcf.baseName}_highconf.vcf.gz
+  bcftools view -Oz -e 'FORMAT/AD[1:0]<5 & TYPE!="snps"' ${vcf} -o ${vcf.baseName}_highconf.vcf.gz
   """
   }else{
   """
