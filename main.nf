@@ -90,7 +90,8 @@ process HQ_VCF{
   script:
   if(params.debug == false){
   """
-  bcftools view -Oz -e 'FORMAT/AD[1:0]<5 & TYPE!="snps"' ${vcf} -o ${vcf.baseName}_highconf.vcf.gz
+  #we assume that tumor WGS is the second sample in the VCF file	
+  bcftools view -Oz -e 'FORMAT/AD[1:0]<5 | TYPE!="snps"' ${vcf} -o ${vcf.baseName}_highconf.vcf.gz
   """
   }else{
   """
