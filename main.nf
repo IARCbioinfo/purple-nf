@@ -90,8 +90,13 @@ process HQ_VCF{
   script:
   if(params.debug == false){
   """
-  #we assume that tumor WGS is the second sample in the VCF file	
-  bcftools view -Oz -e 'FORMAT/AD[1:0]<5 | TYPE!="snps"' ${vcf} -o ${vcf.baseName}_highconf.vcf.gz
+  #we assume that tumor WGS is the second sample in the VCF file
+  # SNVs variants with a minimum read support of 5 are kept as high quality
+  bcftools view -Oz -e 'FORMAT/AD[1:0]<5 | TYPE!="snps"' ${vcf} -o ${vcf.baseName}_filter.vcf.gz
+  #we reheader the vcf file to match purple, cobalt, and amber sample names
+  zcat ${vcf.baseName}_filter.vcf.gz | egrep "^#CHR" |\
+  awk -v tid=${tumor_id} '{print tid"_N "$(NF-1); print tid"_T "\$NF}' > rename_sample.txt
+  bcftools reheader -s rename_sample.txt -o ${vcf.baseName}_highconf.vcf.gz ${vcf.baseName}_filter.vcf.gz
   """
   }else{
   """
