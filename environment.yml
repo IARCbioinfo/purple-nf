@@ -7,3 +7,4 @@ dependencies:
   - hmftools-cobalt=1.11
   - hmftools-purple=2.52
   - hmftools-amber=3.5
+  - bcftools=1.13
