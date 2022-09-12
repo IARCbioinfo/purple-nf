@@ -128,6 +128,18 @@ The first time that the container is built from the docker image, the TMPDIR  sh
 export TMPDIR=/tmp
 ```
 
+### multiple input files for each of the following file names: null, null.bai (or null, null.crai if using cram mode)
+If the input file is not tabulation-separated, nextflow will return an input file name collision because it will not find the proper tumor and normal columns and thus will try to create dead symlinks to two sets of files named "null" and "null.bai" (see issue https://github.com/IARCbioinfo/purple-nf/issues/2 ):
+
+```
+Error executing process > 'AMBER'
+
+Caused by:
+  Process `AMBER` input file name collision -- There are multiple input files for each of the following file names: null, null.bai
+```
+
+The solution is to format the input file as a tsv, replacing space separations by tabulations.
+
 ## Contributions
 
   | Name      | Email | Description     |
